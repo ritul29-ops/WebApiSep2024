@@ -1,0 +1,12 @@
+@Api_HostAddress = http://localhost:1337
+
+###
+
+POST {{Api_HostAddress}}/catalog/microsoft/software
+Content-Type: application/json
+
+{
+  "name": "Some Name",
+  "description": "Some Description"
+  
+}
