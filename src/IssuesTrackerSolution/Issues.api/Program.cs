@@ -1,8 +1,12 @@
 using FluentValidation;
 using HtTemplate.Configuration;
 using Issues.Api.Catalog;
-using Issues.Api.Vendors;
+using Issues.Api.Issues;
+using Issues.Api.Vendors.Entities;
+using Issues.Api.Vendors.Services;
 using Marten;
+using Wolverine.Marten;
+using static Issues.Api.Vendors.Models.VendorCreateRequest;
 
 var builder = WebApplication.CreateBuilder(args); // the built in reasonable defaults, according to the ASP.NET MVC Core team.
 
@@ -22,7 +26,7 @@ builder.Services.AddMarten(options =>
 {
     options.Connection(connectionString);
     options.Schema.For<VendorItemEntity>().UniqueIndex(Marten.Schema.UniqueIndexType.Computed, v => v.Slug);
-}).UseLightweightSessions();
+}).UseLightweightSessions().IntegrateWithWolverine();
 
 builder.Services.AddValidatorsFromAssemblyContaining<VendorCreateRequestValidator>(); // you only need to do this once.
 
@@ -47,5 +51,9 @@ app.UseAuthorization(); // AuthN - verifying the identity of the person
 
 app.MapControllers(); // Uses reflection in .NET to find all the controllers, look at their attributes and create the route table.
 
+if (await app.IsDevFeatureEnabledAsync(ApiFeatureManagementOptions.IssuesFeature))
+{
+    app.MapIssuesApi();
+}
 
 app.Run(); // it starts running here.

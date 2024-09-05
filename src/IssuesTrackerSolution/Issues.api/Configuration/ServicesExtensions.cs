@@ -2,12 +2,14 @@ using MicroElements.Swashbuckle.FluentValidation.AspNetCore;
 using Microsoft.FeatureManagement;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using Wolverine;
 
 namespace HtTemplate.Configuration;
 public static class ServicesExtensions
 {
     public static WebApplicationBuilder AddCustomFeatureManagement(this WebApplicationBuilder builder)
     {
+        builder.Host.UseWolverine();
         builder.Services.Configure<ApiFeatureManagementOptions>(
             builder.Configuration.GetSection(ApiFeatureManagementOptions.FeatureManagement));
         builder.Services.AddFeatureManagement();
@@ -27,7 +29,7 @@ public static class ServicesExtensions
     public static IServiceCollection AddCustomOasGeneration(this IServiceCollection services)
     {
 
-        services.AddEndpointsApiExplorer();
+        services.AddEndpointsApiExplorer(); // Microsoft.
         services.AddSwaggerGen(
             options =>
             {
@@ -57,6 +59,10 @@ public static class ServicesExtensions
                 });
                 var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
                 options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
+                //options.DocInclusionPredicate((_, api) => !string.IsNullOrWhiteSpace(api.GroupName));
+                options.DocInclusionPredicate((_, api) => true);
+                //options.EnableAnnotations();
+
 
             });
         services.AddFluentValidationRulesToSwagger();

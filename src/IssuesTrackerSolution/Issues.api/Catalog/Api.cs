@@ -1,15 +1,29 @@
 ﻿using FluentValidation;
-using Issues.Api.Vendors;
+using Issues.Api.Vendors.Utils;
 using Marten;
 using Riok.Mapperly.Abstractions;
+using Swashbuckle.AspNetCore.Annotations;
 using System.ComponentModel.DataAnnotations;
 
 namespace Issues.Api.Catalog;
 
+[Produces("application/json")]
+[ApiExplorerSettings(GroupName = "Software")]
 public class Api(ILookupVendors vendorLookup, TimeProvider timeProvider, IDocumentSession session) : ControllerBase
 {
     // Todo: Only members of SoftwareCenter role should be able to do this.
+    /// <summary>
+    /// Use this to add a piece of software to the vendor
+    /// </summary>
+    /// <param name="vendor">the id of the vendor</param>
+    /// <returns></returns>
     [HttpPost("/vendors/{vendor}/software")]
+    [ResponseCache(Duration = 15, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [SwaggerOperation(Tags = ["Software"])]
+
     public async Task<ActionResult<SoftwareCatalogItemResponse>> AddSoftwareToCatalogAsync(
         [FromBody] CreateSoftwareCatalogItemRequest request,
         [FromRoute] string vendor,
@@ -40,8 +54,31 @@ public class Api(ILookupVendors vendorLookup, TimeProvider timeProvider, IDocume
 
         var response = entity.MapToResponse();
         // we need to return something back again, but not the entity or the request.
-        return Ok(response);
+        return CreatedAtRoute("catalog#getsoftwarebyid", new { vendor, software = response.Id }, response);
     }
+    // Document
+    [HttpGet("/vendors/{vendor}/software/{software}", Name = "catalog#getsoftwarebyid")]
+    [ResponseCache(Duration = 15, Location = ResponseCacheLocation.Client)]
+    [SwaggerOperation(Tags = ["Software"])]
+    public async Task<ActionResult<SoftwareCatalogItemResponse>> GetSoftwareById(string software, string vendor, CancellationToken token)
+    {
+        var item = await session.Query<CatalogItemEntity>().SingleOrDefaultAsync(item => item.Slug == software, token);
+        if (await vendorLookup.IsCurrentVendorAsync(vendor) == false)
+        {
+            return NotFound("Vendor does not exist");
+        }
+        if (item is null)
+        {
+            return NotFound("Vendor does not have that software");
+        }
+        else
+        {
+            return Ok(item.MapToResponse());
+        }
+    }
+
+    // TODO add a GET /vendors/{vendor}/software -> return all the software for a vendor.
+    // As long as that is a good vendor, this should never return a 404.
 }
 
 public interface ILookupVendors
@@ -78,7 +115,7 @@ public class CreateSoftwareCatalogItemRequestValidator : AbstractValidator<Creat
         RuleFor(c => c.Description).NotEmpty().MinimumLength(10).MaximumLength(1024);
         RuleFor(v => v.Name).MustAsync(async (name, cancellation) =>
         {
-            var slug = SlugGenerator.GenerateSlugFor(name);
+            var slug = name.GenerateSlug();
             var exists = await session.Query<CatalogItemEntity>().AnyAsync(v => v.Slug == slug, cancellation);
             return !exists;
         }).WithMessage("That Software Item Already Exists");
@@ -96,7 +133,7 @@ public static class CatalogMappingExtensions
             Description = request.Description,
             AddedBy = "sub of the person that added this",
             DateAdded = createdTime,
-            Slug = SlugGenerator.GenerateSlugFor(request.Name),
+            Slug = request.Name.GenerateSlug(),
             Vendor = vendor,
         };
     }
